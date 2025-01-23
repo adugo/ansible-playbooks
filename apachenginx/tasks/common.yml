@@ -1,0 +1,12 @@
+---
+- name: Lectura de las IPs de Apache y nombre de dominio de Nginx
+  vars_prompt:
+    - name: "apache_ips"
+      prompt: "Ingresa las IPs de los servidores Apache, separadas por comas"
+      private: no
+    - name: "nginx_ip"
+      prompt: "Ingresa la IP del servidor Nginx"
+      private: no
+    - name: "nginx_domain"
+      prompt: "Ingresa el nombre de dominio del servidor Nginx (por ejemplo, ejemplo.com)"
+      private: no
