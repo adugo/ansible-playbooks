@@ -1,0 +1,44 @@
+---
+- name: Convertir las IPs de Apache en una lista
+  set_fact:
+    apache_servers: "{{ apache_ips.split(',') }}"
+
+- name: Instalar Apache en los servidores especificados
+  package:
+    name: apache2
+    state: present
+  delegate_to: "{{ item }}"
+  loop: "{{ apache_servers }}"
+
+- name: Configurar Apache para escuchar en el puerto 8080
+  lineinfile:
+    path: /etc/apache2/ports.conf
+    regexp: '^Listen'
+    line: 'Listen 8080'
+  delegate_to: "{{ item }}"
+  loop: "{{ apache_servers }}"
+
+- name: Crear archivo de configuración de Apache para puerto 8080
+  copy:
+    content: |
+      <VirtualHost *:8080>
+          DocumentRoot /var/www/html
+          ServerAdmin webmaster@localhost
+          ErrorLog ${APACHE_LOG_DIR}/error.log
+          CustomLog ${APACHE_LOG_DIR}/access.log combined
+      </VirtualHost>
+    dest: /etc/apache2/sites-available/000-default.conf
+  delegate_to: "{{ item }}"
+  loop: "{{ apache_servers }}"
+
+- name: Habilitar el sitio de Apache para puerto 8080
+  command: a2ensite 000-default.conf
+  delegate_to: "{{ item }}"
+  loop: "{{ apache_servers }}"
+
+- name: Reiniciar Apache para aplicar cambios
+  service:
+    name: apache2
+    state: restarted
+  delegate_to: "{{ item }}"
+  loop: "{{ apache_servers }}"
