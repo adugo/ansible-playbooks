@@ -1,0 +1,132 @@
+---
+- hosts: all
+  become: true
+  gather_facts: no
+  vars:
+    ftp_user: "ftpvirtual"
+    ftp_group: "ftpgroup"
+    vsftpd_conf: "/etc/vsftpd.conf"
+    pam_vsftpd: "/etc/pam.d/vsftpd.virtual"
+    db_file: "/etc/vsftpd/virtual_users.db"
+    ssl_cert: "/etc/ssl/certs/vsftpd.pem"
+    ssl_key: "/etc/ssl/private/vsftpd.key"
+    users:
+      - { name: "usuario1", password: "password1", directory: "/var/www/html/wordpress" }
+      - { name: "usuario2", password: "password2", directory: "/home/{{ ftp_user }}/usuario2/subdir" }
+  tasks:
+    - name: Instalar paquetes necesarios
+      apt:
+        name:
+          - vsftpd
+          - db-util
+          - libpam-pwdfile
+          - openssl
+        state: present
+        update_cache: yes
+
+    - name: Crear directorio /etc/vsftpd
+      file:
+        path: "/etc/vsftpd"
+        state: directory
+        owner: "root"
+        group: "root"
+        mode: '0755'
+
+    - name: Crear grupo para usuarios virtuales
+      group:
+        name: "{{ ftp_group }}"
+        state: present
+
+    - name: Crear usuario del sistema para FTP
+      user:
+        name: "{{ ftp_user }}"
+        group: "{{ ftp_group }}"
+        home: "/home/{{ ftp_user }}"
+        shell: "/usr/sbin/nologin"
+        create_home: yes
+
+    - name: Crear directorio de chroot para los usuarios
+      file:
+        path: "{{ item.directory }}"
+        state: directory
+        owner: "{{ ftp_user }}"
+        group: "{{ ftp_group }}"
+        mode: '0755'
+      loop: "{{ users }}"
+
+    - name: Crear certificado SSL autofirmado para FTPS
+      command: >
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout {{ ssl_key }} -out {{ ssl_cert }} \
+        -subj "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=ftpserver"
+      args:
+        creates: "{{ ssl_cert }}"
+
+    - name: Establecer permisos correctos en el certificado
+      file:
+        path: "{{ ssl_cert }}"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Crear archivo de credenciales para usuarios virtuales
+      copy:
+        dest: "/etc/vsftpd/virtual_users.txt"
+        content: |
+          {% for user in users %}
+          {{ user.name }}
+          {{ user.password }}
+          {% endfor %}
+
+    - name: Generar base de datos de usuarios virtuales
+      command: db_load -T -t hash -f /etc/vsftpd/virtual_users.txt "{{ db_file }}"
+      args:
+        creates: "{{ db_file }}"
+
+    - name: Establecer permisos correctos en la base de datos
+      file:
+        path: "{{ db_file }}"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Configurar autenticación PAM para vsftpd
+      copy:
+        dest: "{{ pam_vsftpd }}"
+        content: |
+          auth required pam_pwdfile.so pwdfile={{ db_file }}
+          account required pam_permit.so
+
+    - name: Configurar vsftpd con FTPS
+      copy:
+        dest: "{{ vsftpd_conf }}"
+        content: |
+          listen=YES
+          anonymous_enable=NO
+          local_enable=YES
+          write_enable=YES
+          local_umask=022
+          chroot_local_user=YES
+          guest_enable=YES
+          guest_username={{ ftp_user }}
+          user_sub_token=$USER
+          local_root={{ item.directory }}
+          hide_ids=YES
+          virtual_use_local_privs=YES
+          pam_service_name=vsftpd.virtual
+          pasv_enable=YES
+          pasv_min_port=40000
+          pasv_max_port=50000
+          allow_writeable_chroot=YES
+          ssl_enable=YES
+          rsa_cert_file={{ ssl_cert }}
+          rsa_private_key_file={{ ssl_key }}
+          force_local_logins_ssl=YES
+          force_local_data_ssl=YES
+      loop: "{{ users }}"
+
+    - name: Reiniciar vsftpd
+      systemd:
+        name: vsftpd
+        state: restarted
+        enabled: yes

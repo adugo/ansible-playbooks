@@ -1,0 +1,205 @@
+---
+- hosts: all
+  become: true
+  gather_facts: no
+
+  vars_prompt:
+    - name: "action"
+      prompt: |
+        Selecciona una opción:
+        0 - Wordpress
+        1 - Nextcloud
+        2 - Wordpress y Nextcloud
+      private: no
+
+  vars_files:
+    - vars/vars.yml
+
+  tasks:
+    - name: Añadir dominio wp a /etc/hosts en servidor
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        insertafter: "127.0.0.1 localhost"
+        line: "127.0.0.1 {{ wpDomain }}"
+      when: action in ["0", "2"]
+
+
+    - name: Actualizar repositorios
+      apt:
+        name: aptitude
+        update_cache: yes
+        state: latest
+        force_apt_get: yes
+      tags: [ system ]
+
+    - name: Instalación de LAMP
+      apt:
+        name: "{{ item }}"
+        update_cache: yes
+        state: latest
+      loop: [ 'apache2', 'mariadb-server', 'python3-pymysql', 'php', 'php-mysql', 'libapache2-mod-php' ]
+      tags: [ system ]
+
+    - name: Instalar extensiones de PHP
+      apt:
+        name: "{{ item }}"
+        update_cache: yes
+        state: latest
+      loop: "{{ phpModules }}"
+      tags: [ system ]
+
+    - name: Puerto Apache2 a 8080
+      lineinfile:
+        path: /etc/apache2/ports.conf
+        regexp: '^Listen 80'
+        line: "Listen {{ httpPort }}"
+        state: present
+
+    - name: Enable rewrite module
+      shell: /usr/sbin/a2enmod rewrite
+      tags: [ apache ]
+
+    - name: Disable default Apache site
+      shell: /usr/sbin/a2dissite 000-default.conf
+      tags: [ apache ]
+
+    - name: Set the root password
+      mysql_user:
+        name: root
+        password: "{{ mysqlRootPassword }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      tags: [ mysql, mysql-root ]
+
+    - name: Remove all anonymous user accounts
+      mysql_user:
+        name: ''
+        host_all: yes
+        state: absent
+        login_user: root
+        login_password: "{{ mysqlRootPassword }}"
+      tags: [ mysql ]
+
+    - name: Remove the MySQL test database
+      mysql_db:
+        name: test
+        state: absent
+        login_user: root
+        login_password: "{{ mysqlRootPassword }}"
+      tags: [ mysql ]
+
+    - name: Install debconf-utils to provide debconf-get-selections
+      apt:
+        name: debconf-utils
+        state: present
+      become: yes
+      tags: [ phpmyadmin ]
+
+    - name: debconf for pma
+      debconf: name=phpmyadmin question='phpmyadmin/dbconfig-install' value='true' vtype='boolean'
+      tags: [ phpmyadmin ]
+
+    - name: debconf for pma
+      debconf: name=phpmyadmin question='phpmyadmin/app-password-confirm' value='{{mysqlRootPassword}}' vtype='password'
+      tags: [ phpmyadmin ]
+
+    - name: debconf for pma
+      debconf: name=phpmyadmin question='phpmyadmin/mysql/admin-pass' value='{{mysqlRootPassword}}' vtype='password'
+      tags: [ phpmyadmin ]
+
+    - name: debconf for pma
+      debconf: name=phpmyadmin question='phpmyadmin/mysql/app-pass' value='{{mysqlRootPassword}}' vtype='password'
+      tags: [ phpmyadmin ]
+
+    - name: debconf for pma
+      debconf: name=phpmyadmin question='phpmyadmin/reconfigure-webserver' value='' vtype='multiselect'
+      tags: [ phpmyadmin ]
+
+    - name: install pma
+      apt: pkg=phpmyadmin state=present
+      tags: [ phpmyadmin ]
+
+    - name: configure site
+      file: path=/var/www/phpmyadmin src=/usr/share/phpmyadmin state=link
+      tags: [ phpmyadmin ]
+
+    - name: Update apache2.conf for phpmyadmin
+      lineinfile:
+        dest: /etc/apache2/apache2.conf
+        line: "Include /etc/phpmyadmin/apache.conf"
+      tags: [ phpmyadmin ]
+
+    - name: Ejecutar instalación de WordPress
+      import_tasks: "includes/subWordpress.yml"
+      when: action in ["0", "2"]
+
+    - name: Ejecutar instalación de Nextcloud
+      import_tasks: "includes/subNextcloud.yml"
+      when: action in ["1", "2"]
+
+
+    # Nginx Configuration
+    - name: Install Nginx
+      apt:
+        name: "nginx"
+        update_cache: yes
+        state: latest
+      tags: [ system ]
+
+    #- name: Crear directorios para los certificados SSL si no existen
+    #  file:
+    #    path: "{{ item }}"
+    #    state: directory
+    #    mode: '0755'
+    #  loop:
+    #    - /etc/ssl/private
+    #    - /etc/ssl/certs
+    #  delegate_to: "localhost"
+    #  become: yes
+
+    #- name: A entero
+    #  set_fact:
+    #    index: "{{ action|int }}"
+    #  tags: [ test ]
+
+    - name: Crear un certificado SSL autofirmado
+      command: >
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/nginx-selfsigned.key
+        -out /etc/ssl/certs/nginx-selfsigned.crt
+        -subj "/C=ES/ST=Córdoba/L=Córdoba/O=ASIR/OU=ParejitaFeliz/CN={{ item }}"
+      #delegate_to: "localhost"
+      become: yes
+      loop: "{{ (action == '2') | ternary([wpDomain, nxDomain], [commonNames[action|int]]) }}"
+      tags: [ test ]
+
+    - name: Set up Nginx-Wordpress VirtualHost default
+      template:
+        src: "files/wpNginx.conf.j2"
+        dest: "/etc/nginx/sites-available/{{ wpDomain }}"
+      when: action in ["0", "2"]
+
+    - name: Remove the default site symbolic link
+      file:
+        path: "/etc/nginx/sites-enabled/default"
+        state: absent
+
+    - name: Crear enlace simbólico para habilitar el sitio en Nginx
+      file:
+        src: /etc/nginx/sites-available/{{ wpDomain }}
+        dest: /etc/nginx/sites-enabled/{{ wpDomain }}
+        state: link
+      #delegate_to: "localhost"
+      become: yes
+      when: action in ["0", "2"]
+
+
+    - name: Reiniciar Nginx para aplicar cambios
+      service:
+        name: nginx
+        state: restarted
+      #delegate_to: "localhost"
+      become: yes
+      tags: [ test ]
+
+    - name: Ejecutar instalación de VSFTP
+      import_tasks: "includes/subVsftpd.yml"
+

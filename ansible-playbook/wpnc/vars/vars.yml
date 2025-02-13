@@ -1,0 +1,61 @@
+---
+#VARIABLES DE WORDPRESS
+
+wpDomain: "wp"
+wpIP: "127.0.0.1"
+wpDBName: "wpdb"
+wpDBUser: "wpdbu"
+wpDBPassword: "wpdbu"
+wpVirtualHostFile: "{{ wpDomain }}.conf"
+
+#VARIABLES DE NEXTCLOUD
+nxDomain: "nx"
+nxIP: "127.0.0.1"
+nxDBName: "nxdb"
+nxDBUser: "nxdbu"
+nxDBPassword: "nxdbu"
+nxVirtualHostFile: "{{ nxDomain }}.conf"
+
+# MySQL
+mysqlRootPassword: "root"
+
+# COMMON VARS
+phpModules: [ 'php-curl', 'php-gd', 'php-mbstring', 'php-xml', 'php-xmlrpc', 'php-soap', 'php-intl', 'php-zip', 'php-imagick' ]
+# backend
+httpPort: "8080"
+
+nextcloud_version: "30.0.4"
+
+#CREAR CERTIFICADOS CON EL COMMONNAME Y EL ACTION
+commonNames:
+     - "{{wpDomain}}"
+     - "{{nxDomain}}"
+
+#VSFTPD
+vsftpdPasswp: "user1"
+vsftpdPassnx: "user2"
+
+# VARIABLES GLOBALES
+#System Settings
+#php_modules: [ 'php-curl', 'php-gd', 'php-mbstring', 'php-xml', 'php-xmlrpc', 'php-soap', 'php-intl', 'php-zip', 'php-imagick' ]
+
+#MySQL Settings
+#mysql_root_password: "root"
+
+#HTTP Settings
+#http_port: "8080"
+
+#Nginx Settings
+#nginx_domain: "ra"
+
+# VARIABLES DE WORDPRESS
+#http_conf_wp: "{{ wpDomain }}.conf"
+#mysql_db_wp: "wpdb"
+#mysql_user_wp: "wpuser"
+#mysql_password_wp: "wpuser"
+
+# VARIABLES DE NEXTCLOUD
+#http_conf_nc: "{{ ncDomain }}.conf"
+#mysql_db_nc: "ncdb"
+#mysql_user_nc: "ncuser"
+#mysql_password_nc: "ncuser"

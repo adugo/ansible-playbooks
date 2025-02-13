@@ -1,0 +1,99 @@
+    - name: Instalar paquetes requeridos
+      apt:
+        pkg:
+          - vsftpd
+          - libpam-pwdfile
+          - apache2
+        update_cache: yes
+        state: present
+
+    - name: Instalar bcrypt-tool via snap
+      snap:
+        name: bcrypt-tool
+        state: present
+
+    - name: Crear configuración de vsftpd
+      template:
+        src: "../files/vsftpd.conf.j2"
+        dest: "/etc/vsftpd.conf"
+
+    - name: Crear usuario vsftpd
+      user:
+        name: vsftpd
+        home: /home/vsftpd
+        group: www-data
+        shell: /bin/false
+        create_home: yes
+        system: yes
+
+    - name: Configurar permisos de /var/www/wp
+      file:
+        path: /var/www/wp
+        state: directory
+        owner: vsftpd
+        group: nogroup
+        mode: '0755'
+        recurse: yes
+
+    - name: Configurar permisos de /var/www/nx
+      file:
+        path: /var/www/nx
+        state: directory
+        owner: vsftpd
+        group: www-data
+        mode: '0755'
+        recurse: yes
+
+    - name: Crear directorio de configuración de usuarios
+      file:
+        path: /etc/vsftpd/userconfig
+        state: directory
+        mode: '0755'
+
+    - name: Configurar usuario FTP Wordpress
+      blockinfile:
+        path: /etc/vsftpd/userconfig/ftpwp
+        create: yes
+        block: |
+          local_root=/var/www/wp
+
+    - name: Configurar usuario FTP Nextcloud
+      blockinfile:
+        path: /etc/vsftpd/userconfig/ftpnx
+        create: yes
+        block: |
+          local_root=/var/www/nx
+
+    - name: Configurar PAM
+      copy:
+        dest: /etc/pam.d/vsftpd
+        content: |
+          auth required pam_pwdfile.so pwdfile /etc/vsftpd/ftpd.passwd
+          account required pam_permit.so
+
+    - name: Crear contraseña de usuario Wordpress
+      shell: >
+        htpasswd -p -b /etc/vsftpd/ftpd.passwd ftpwp
+        $(bcrypt-tool hash {{ vsftpdPasswp }})
+
+    - name: Crear contraseña de usuario NextCloud
+      shell: >
+        htpasswd -p -b /etc/vsftpd/ftpd.passwd ftpnx
+        $(bcrypt-tool hash {{ vsftpdPassnx }})
+      # args:
+      #   warn: false  # Desactiva la advertencia de uso de comandos
+
+    #- name: Generar certificado SSL
+    #  command: >
+    #    openssl req -x509 -nodes -days 365 -newkey rsa:2048
+    #    -keyout /etc/ssl/private/vsftpd.pem
+    #    -out /etc/ssl/private/vsftpd.pem
+    #    -subj "/CN=localhost"
+    #  args:
+    #    creates: /etc/ssl/private/vsftpd.pem
+
+    - name: Habilitar y reiniciar vsftpd
+      service:
+        name: vsftpd
+        enabled: yes
+        state: restarted

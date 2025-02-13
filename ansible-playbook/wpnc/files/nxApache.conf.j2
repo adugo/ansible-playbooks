@@ -1,0 +1,18 @@
+<VirtualHost {{ wpIP }}:{{ httpPort }}>
+    ServerAdmin webmaster@localhost
+    ServerName {{ nxDomain }}
+    ServerAlias www.{{ nxDomain }}
+    DocumentRoot /var/www/{{ nxDomain }}/nextcloud
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+    <Directory /var/www/{{ nxDomain }}>
+          Options -Indexes
+          AllowOverride All
+    </Directory>
+
+    <IfModule mod_dir.c>
+        DirectoryIndex index.php index.html index.cgi index.pl  index.xhtml index.htm
+    </IfModule>
+
+</VirtualHost>
