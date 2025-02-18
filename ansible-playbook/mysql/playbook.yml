@@ -1,0 +1,95 @@
+##################################################
+# DO Community Playbooks: LAMP on Ubuntu 18.04
+##################################################
+---
+- hosts: all
+  become: true
+  vars_prompt:
+    - name: mysql_root_password
+      prompt: "Ingresa la contraseña de root de MySQL"
+      private: yes  # Oculta la entrada de la contraseña
+
+    - name: new_bd
+      prompt: "Ingresa el nombre de la base de datos a crear"
+      private: no
+
+    - name: new_user
+      prompt: "Ingresa el nombre del usuario a crear"
+      private: no
+
+    - name: password_user
+      prompt: "Ingresa la contraseña del nuevo usuario"
+      private: yes  # Oculta la entrada de la contraseña
+  tasks:
+    - name: Install prerequisites
+      apt: name={{ item }} update_cache=yes state=latest force_apt_get=yes
+      loop: [ 'aptitude' ]
+
+  #Mysql Install
+    - name: Install mysql
+      apt: name={{ item }} update_cache=yes state=latest
+      loop: [ 'mysql-server', 'python3-pymysql', 'php', 'php-mysql']
+
+  # MySQL Configuration
+    - name: Sets the root password
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      tags:
+        - mysql
+
+    - name: Removes all anonymous user accounts
+      mysql_user:
+        name: ''
+        host_all: yes
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      tags:
+        - mysql
+
+    - name: Removes the MySQL test database
+      mysql_db:
+        name: test
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      tags:
+        - mysql
+
+    - name: Crear la base de datos
+      mysql_db:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        name: "{{ new_bd }}"
+        state: present
+
+    - name: Crear el usuario en MySQL
+      mysql_user:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        name: "{{ new_user }}"
+        password: "{{ password_user }}"
+        host: "%"
+        priv: "{{ new_bd }}.*:ALL"
+        state: present
+
+    - name: Aplicar los cambios de privilegios
+      mysql_query:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        query: "FLUSH PRIVILEGES"
+
+    - name: Cambiar bind-address a 0.0.0.0 en mysqld.cnf
+      lineinfile:
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf  # Ruta al archivo de configuración
+        regexp: '^bind-address\s*=\s*127.0.0.1'  # Busca la línea que comienza con bind-address
+        line: 'bind-address = 0.0.0.0'  # Reemplaza con esta línea
+        state: present
+        backup: yes  # Crea un backup del archivo antes de modificarlo
+
+    - name: Reiniciar el servicio MySQL para aplicar los cambios
+      service:
+        name: mysql
+        state: restarted
