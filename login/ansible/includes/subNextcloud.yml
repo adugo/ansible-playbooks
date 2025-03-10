@@ -1,0 +1,87 @@
+---
+# Configuración de Apache
+- name: Create document root
+  file:
+    path: "/var/www/{{ nxDomain }}"
+    state: directory
+    owner: "www-data"
+    group: "www-data"
+    mode: '0755'
+  tags: [ apache ]
+
+- name: Set up Apache VirtualHost
+  template:
+    src: "../files/nxApache.conf.j2"
+    dest: "/etc/apache2/sites-available/{{ nxVirtualHostFile }}"
+  tags: [ apache ]
+
+- name: Enable new site
+  shell: /usr/sbin/a2ensite {{ nxVirtualHostFile }}
+  tags: [ apache ]
+
+- name: Restart Apache to apply changes
+  service:
+    name: apache2
+    state: restarted
+  tags: [ apache ]
+
+
+#CONFIGURACION MARIADB NEXTCLOUD
+- name: Crear base de datos Nextcloud
+  mysql_db:
+    name: "{{ nxDBName }}"
+    state: present
+    login_user: root
+    login_password: "{{ mysqlRootPassword }}"
+  tags: [ mysql ]
+
+- name: Crear usuario de la base de datos
+  mysql_user:
+    name: "{{ nxDBUser }}"
+    password: "{{ nxDBPassword }}"
+    priv: "{{ nxDBName }}.*:ALL"
+    state: present
+    login_user: root
+    login_password: "{{ mysqlRootPassword }}"
+  tags: [ mysql ]
+
+- name: Descargar y extraer Nextcloud
+  get_url:
+    url: "https://download.nextcloud.com/server/releases/nextcloud-{{ nextcloud_version }}.zip"
+    dest: "/tmp/nextcloud.zip"
+
+- name: Extraer Nextcloud
+  unarchive:
+    src: "/tmp/nextcloud.zip"
+    dest: "/var/www/{{ nxDomain }}"
+    remote_src: yes
+    creates: "/var/www/{{ nxDomain }}/nextcloud"
+  tags: [ nextcloud ]
+
+- name: Definir variables de Nextcloud
+  set_fact:
+    db_name: "{{ nxDBName }}"
+    db_user: "{{ nxDBUser }}"
+    db_password: "{{ nxDBPassword }}"
+    nextcloud_version: "27.0.2"
+    web_root: "/var/www/{{ nxDomain }}/nextcloud"
+
+- name: Establecer permisos adecuados
+  file:
+    path: "/var/www/html/"
+    owner: www-data
+    group: www-data
+    recurse: yes
+
+- name: Habilitar configuración de Apache y reiniciar
+  shell: |
+    a2ensite nx.conf
+    a2enmod rewrite
+    systemctl restart apache2
+
+# Reiniciar MySQL para aplicar cambios
+- name: Restart MySQL to apply changes
+  service:
+    name: mariadb
+    state: restarted
+  tags: [ mysql ]

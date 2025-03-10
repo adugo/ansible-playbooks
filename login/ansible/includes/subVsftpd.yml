@@ -1,0 +1,144 @@
+    - name: Instalar paquetes requeridos
+      apt:
+        pkg:
+          - vsftpd
+          - libpam-pwdfile
+          - apache2
+        update_cache: yes
+        state: present
+
+    - name: Instalar bcrypt-tool via snap
+      snap:
+        name: bcrypt-tool
+        state: present
+
+    - name: Crear configuración de vsftpd
+      template:
+        src: "../files/vsftpd.conf.j2"
+        dest: "/etc/vsftpd.conf"
+
+    - name: Crear usuario vsftpd
+      user:
+        name: vsftpd
+        home: /home/vsftpd
+        group: www-data
+        shell: /bin/false
+        create_home: yes
+        system: yes
+
+    - name: Configurar permisos de /var/www/wp
+      file:
+        path: /var/www/wp
+        state: directory
+        owner: vsftpd
+        group: nogroup
+        mode: '0777'
+        recurse: yes
+
+    - name: Configurar permisos de /var/www/nx
+      file:
+        path: /var/www/nx
+        state: directory
+        owner: vsftpd
+        group: www-data
+        mode: '0777'
+        recurse: yes
+
+    - name: Crear directorio de configuración de usuarios
+      file:
+        path: /etc/vsftpd/userconfig
+        state: directory
+        mode: '0777'
+
+    - name: Configurar usuario FTP Wordpress
+      blockinfile:
+        path: /etc/vsftpd/userconfig/ftpwp
+        create: yes
+        block: |
+          local_root=/var/www/wp
+
+    - name: Configurar usuario FTP Nextcloud
+      blockinfile:
+        path: /etc/vsftpd/userconfig/ftpnx
+        create: yes
+        block: |
+          local_root=/var/www/nx
+
+    - name: Configurar PAM
+      copy:
+        dest: /etc/pam.d/vsftpd
+        content: |
+          auth required pam_pwdfile.so pwdfile /etc/vsftpd/ftpd.passwd
+          account required pam_permit.so
+    
+    - name: Crear archivo ftpd.passwd si no existe
+      file:
+        path: /etc/vsftpd/ftpd.passwd
+        state: touch
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Crear contraseña de usuario Wordpress
+      shell: |
+        if [ -f /etc/vsftpd/ftpd.passwd ]; then
+          htpasswd -b /etc/vsftpd/ftpd.passwd ftpwp {{ vsftpdPasswp }}
+        else
+          htpasswd -cb /etc/vsftpd/ftpd.passwd ftpwp {{ vsftpdPasswp }}
+        fi
+      args:
+        creates: /etc/vsftpd/ftpd.passwd
+
+    - name: Crear contraseña de usuario NextCloud
+      shell: |
+        if [ -f /etc/vsftpd/ftpd.passwd ]; then
+          htpasswd -b /etc/vsftpd/ftpd.passwd ftpnx {{ vsftpdPassnx }}
+        else
+          htpasswd -cb /etc/vsftpd/ftpd.passwd ftpnx {{ vsftpdPassnx }}
+        fi
+      args:
+        creates: /etc/vsftpd/ftpd.passwd
+      # args:
+      #   warn: false  # Desactiva la advertencia de uso de comandos
+
+    #- name: Generar certificado SSL
+    #  command: >
+    #    openssl req -x509 -nodes -days 365 -newkey rsa:2048
+    #    -keyout /etc/ssl/private/vsftpd.pem
+    #    -out /etc/ssl/private/vsftpd.pem
+    #    -subj "/CN=localhost"
+    #  args:
+    #    creates: /etc/ssl/private/vsftpd.pem
+
+    - name: Configurar permisos de /var/www/moodle
+      file:
+        path: /var/www/moodle
+        state: directory
+        owner: vsftpd
+        group: www-data
+        mode: '0777'
+        recurse: yes
+
+    - name: Configurar usuario FTP Moodle
+      blockinfile:
+        path: /etc/vsftpd/userconfig/ftpmoodle
+        create: yes
+        block: |
+          local_root=/var/www/moodle
+
+    - name: Crear contraseña de usuario Moodle
+      shell: |
+        if [ -f /etc/vsftpd/ftpd.passwd ]; then
+          htpasswd -b /etc/vsftpd/ftpd.passwd ftpmoodle {{ vsftpdPassmoodle }}
+        else
+          htpasswd -cb /etc/vsftpd/ftpd.passwd ftpmoodle {{ vsftpdPassmoodle }}
+        fi
+      args:
+        creates: /etc/vsftpd/ftpd.passwd
+
+
+    - name: Habilitar y reiniciar vsftpd
+      service:
+        name: vsftpd
+        enabled: yes
+        state: restarted

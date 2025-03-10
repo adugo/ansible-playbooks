@@ -1,0 +1,18 @@
+<VirtualHost {{ moodleIP }}:{{ httpPort }}>
+    ServerAdmin webmaster@localhost
+    ServerName {{ moodleDomain }}
+    ServerAlias www.{{ moodleDomain }}
+    DocumentRoot /var/www/{{ moodleDomain }}/moodle
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+    <Directory /var/www/{{ moodleDomain }}>
+          Options -Indexes
+          AllowOverride All
+    </Directory>
+
+    <IfModule mod_dir.c>
+        DirectoryIndex index.php index.html index.cgi index.pl  index.xhtml index.htm
+    </IfModule>
+
+</VirtualHost>

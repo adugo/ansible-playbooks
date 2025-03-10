@@ -1,0 +1,1 @@
+192.168.59.40 ansible_user=user ansible_ssh_pass=user

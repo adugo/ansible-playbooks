@@ -1,0 +1,46 @@
+---
+#VARIABLES DE WORDPRESS
+
+wpDomain: "wp"
+wpIP: "127.0.0.1"
+wpDBName: "wpdb"
+wpDBUser: "wpdbu"
+wpDBPassword: "wpdbu"
+wpVirtualHostFile: "{{ wpDomain }}.conf"
+
+#VARIABLES DE NEXTCLOUD
+nxDomain: "nx"
+nxIP: "127.0.0.1"
+nxDBName: "nxdb"
+nxDBUser: "nxdbu"
+nxDBPassword: "nxdbu"
+nxVirtualHostFile: "{{ nxDomain }}.conf"
+
+#VARIABLES DE MOODLE
+moodleDomain: "moodle"
+moodleIP: "127.0.0.1"
+moodleDBName: "moodledb"
+moodleDBUser: "moodledbu"
+moodleDBPassword: "moodledbu"
+moodleVirtualHostFile: "{{ moodleDomain }}.conf"
+
+# MySQL
+mysqlRootPassword: "root"
+
+# COMMON VARS
+phpModules: [ 'php-curl', 'php-gd', 'php-mbstring', 'php-xml', 'php-xmlrpc', 'php-soap', 'php-intl', 'php-zip', 'php-imagick' ]
+# backend
+httpPort: "8080"
+
+nextcloud_version: "30.0.4"
+
+#CREAR CERTIFICADOS CON EL COMMONNAME Y EL ACTION
+commonNames:
+     - "{{wpDomain}}"
+     - "{{nxDomain}}"
+
+#VSFTPD
+vsftpdPasswp: "user1"
+vsftpdPassnx: "user2"
+
+
